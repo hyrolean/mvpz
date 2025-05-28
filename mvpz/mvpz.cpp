@@ -2,6 +2,7 @@
 //
 
 #include "stdafx.h"
+#include <iterator>
 #include <memory>
 #include <string>
 #include <vector>
@@ -267,6 +268,11 @@ static bool IsDirectory(string Path)
     folder_is_existed(Path) ;
 }
 //---------------------------------------------------------------------------
+static bool IsDrive(string Path)
+{
+  return file_drive_of(Path)==Path;
+}
+//---------------------------------------------------------------------------
 static bool __fastcall SetFileNameTime(string FileName,
   const FILETIME *lpftCreation, const FILETIME *lpftLastAccess,
   const FILETIME *lpftLastWrite)
@@ -487,11 +493,11 @@ int _tmain(int argc, _TCHAR* argv[])
   if(verbose) {
     int n = (int) transportFiles.size();
     if(n==1)
-      printf("1 source file (%s bytes moving be estimated)\n",
-        IntToKMGT(totalBytes).c_str());
+      printf("1 source file (%s bytes %s be estimated)\n",
+        IntToKMGT(totalBytes).c_str(),removeSourceFiles?"moving":"coping");
     else
-      printf("Total %d source files (%s bytes moving be estimated)\n",
-        n, IntToKMGT(totalBytes).c_str());
+      printf("Total %d source files (%s bytes %s be estimated)\n",
+        n, IntToKMGT(totalBytes).c_str(),removeSourceFiles?"moving":"coping");
   }
 
   error_level++; // 4
@@ -564,11 +570,12 @@ int _tmain(int argc, _TCHAR* argv[])
   for(size_t i=0;i<transportFiles.size();i++) {
     string output = outputFile ;
     if(IsDirectory(output)) {
-      output += "\\"; output += transportFiles[i].data.cFileName;
+      if(!IsDrive(output)) output += "\\";
+      output += transportFiles[i].data.cFileName;
     }
     if(!overwriteDestFiles&&file_is_existed(output)) {
       if(equality(output,transportFiles[i].data)) {
-        printf("File `%s' is skipped due to already existed.\n",transportFiles[i].data.cFileName) ;
+        printf("File `%s' is skipped due to already be existing.\n",transportFiles[i].data.cFileName) ;
         continue ;
       }
     }

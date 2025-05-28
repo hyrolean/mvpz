@@ -31,8 +31,21 @@
 *.out
 *.app
 
-# Others
-*.user
+# Dummy files
 *.~*
+*.ec?
+*.BAT
+Thumbs.db
+
+# VC++ files
+.vs/
+ipch/
+Debug/
+LibOut/
+Release/
+Intermediate/
+*.user
+*.sdf
+*.VC.db
 *.aps
 
