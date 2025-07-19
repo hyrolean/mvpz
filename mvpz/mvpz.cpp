@@ -667,10 +667,10 @@ void help()
   printf("MoVe files with PauZing.\n\n") ;
   printf("usage: mvpz [options] source [source2[ ...]] dest[;dest2[;...]]\n\n") ;
   printf("options:\n") ;
-  printf("\t/d data_size\t... Set trasfering packet size ( bytes [current=%d] ).\n",dataPacket) ;
-  printf("\t/c max_cache\t... Set trasfering maximum cache ( packets [current=%d] ).\n",maxCache) ;
+  printf("\t/d data_size\t... Set transferring packet size ( bytes [current=%d] ).\n",dataPacket) ;
+  printf("\t/c max_cache\t... Set transferring maximum cache ( packets [current=%d] ).\n",maxCache) ;
   printf("\t/a free_space\t... Adjust dest disk free space ( e.g. 10M=10MiBytes, 5G=5GiBytes ).\n");
-  printf("\t/w pause_exe\t... Wait trasmitting while pause_exe is executing.\n") ;
+  printf("\t/w pause_exe\t... Wait transferring while pause_exe is executing.\n") ;
   printf("\t/t data_rate\t... Set traffic data rate ( e.g. 1=100%%[default], 0.75=75%%, 0.5=50%% ).\n");
   printf("\t/s sleep_delay\t... Set sleeping duration per 1 traffic stall ( msec [current=%d] ).\n",SLEEP_DELAY);
   printf("\t/e\t\t... Prioritize disk free space of multi dest candidates.\n") ;
@@ -679,7 +679,7 @@ void help()
   printf("\t/o\t\t... Overwrite existing dest files.\n");
   printf("\t/r\t\t... Move directories recursively.\n");
   printf("\t/M\t\t... Use multimedia timer on interrupt.\n");
-  printf("\t/P\t\t... Prevent suspending on trasmitting files.\n");
+  printf("\t/P\t\t... Prevent suspending on transferring files.\n");
   printf("\t/v\t\t... Verbose proceedings.\n") ;
   printf("\t/h\t\t... Show this help.\n\n") ;
 }
