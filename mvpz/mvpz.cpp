@@ -15,6 +15,7 @@
 #include <process.h>
 #include <tlhelp32.h>
 #include <MMSYSTEM.h>
+#include <shlobj.h>
 #pragma comment(lib, "WinMM.lib")
 
 using namespace std;
@@ -27,8 +28,9 @@ using namespace std;
 void help() ;
 void perrorf(const char *format, ...) ;
 void statusf(const char *format, ...) ;
+void __inline clrstatus() { statusf(" "); }
 bool equality(string fileDest, const WIN32_FIND_DATAA &dataSrc) ;
-bool transmit(string inputFile, string outputFile, const WIN32_FIND_DATAA &data) ;
+bool transfer(string inputFile, string outputFile, const WIN32_FIND_DATAA &data) ;
 
 //---------------------------------------------------------------------------
 
@@ -167,6 +169,7 @@ bool forceMoveAllFiles = false ;
 bool priorFreeSpace = false ;
 bool removeSourceFiles = true ;
 bool overwriteDestFiles = false ;
+bool moveRecursively = false ;
 bool USEMMTIMER = false ;
 bool PREVENTSUSPENDING = false ;
 DWORD SLEEP_DELAY = 30 ;
@@ -312,13 +315,14 @@ static bool __fastcall SetFileNameTime(string FileName,
 
     struct transport_file {
       string file ;
+      string relative ;
       WIN32_FIND_DATAA data;
-      transport_file(string file_, const WIN32_FIND_DATAA &data_)
-       : file(file_) {
+      transport_file(string file_, const WIN32_FIND_DATAA &data_, string relative_="")
+       : file(file_), relative(relative_) {
         CopyMemory(&data,&data_,sizeof data);
       }
       transport_file(const transport_file &src)
-       : file(src.file) {
+       : file(src.file), relative(src.relative) {
         CopyMemory(&data,&src.data,sizeof data);
       }
       __int64 alignBytes(__int64 align) const {
@@ -426,6 +430,9 @@ int _tmain(int argc, _TCHAR* argv[])
         case L'o': // overwrite dest files
           overwriteDestFiles = true ;
           break;
+        case L'r': // move directories recursively
+          moveRecursively = true ;
+          break;
         case L'M': // enable multi media timer
           USEMMTIMER = true;
           break;
@@ -466,22 +473,45 @@ int _tmain(int argc, _TCHAR* argv[])
 
   // enumerate files
   vector<transport_file> transportFiles ;
+  vector<string> sourceDirs ;
   __int64 totalBytes = 0 ;
+  if(verbose) statusf("Enumerating source files...");
   for(size_t i=0;i<files.size();i++) {
-    string inputFile = files[i] ;
-    WIN32_FIND_DATAA data;
-    HANDLE hFind = FindFirstFileA(inputFile.c_str(),&data);
-    if(hFind!=INVALID_HANDLE_VALUE) {
-        do {
-            if(data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY) continue ;
-            if(!forceMoveAllFiles&&(data.dwFileAttributes&(FILE_ATTRIBUTE_READONLY|FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM))) continue ;
-            string input = file_path_of(inputFile)+data.cFileName ;
-            transportFiles.push_back(transport_file(input,data));
-            totalBytes += __int64(data.nFileSizeHigh)<<32 | __int64(data.nFileSizeLow) ;
-        }while(FindNextFileA(hFind,&data)) ;
-        FindClose(hFind) ;
-    }
+    string dir = "" ;
+    deque<string> dirs ;
+    do {
+      string inputFile = files[i] ;
+      if(!dirs.empty()) {
+        dir = dirs.front() ; dirs.pop_front();
+        string inputDir = file_path_of(inputFile) + dir ;
+        inputFile = inputDir + "\\*.*" ;
+        sourceDirs.push_back(inputDir);
+      }
+      WIN32_FIND_DATAA data;
+      HANDLE hFind = FindFirstFileA(inputFile.c_str(),&data);
+      if(hFind!=INVALID_HANDLE_VALUE) {
+          do {
+              if(data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY) {
+                if(moveRecursively) {
+                  string dirnam = data.cFileName ;
+                  if(dirnam!="."&&dirnam!="..") {
+                    string dirpath = dir==""?dirnam:dir+"\\"+dirnam ;
+                    dirs.push_back(dirpath);
+                  }
+                }
+                continue ;
+              }
+              if(!forceMoveAllFiles&&(data.dwFileAttributes&(FILE_ATTRIBUTE_READONLY|FILE_ATTRIBUTE_HIDDEN|FILE_ATTRIBUTE_SYSTEM))) continue ;
+              string filenam = data.cFileName ;
+              string input = file_path_of(inputFile)+filenam ;
+              transportFiles.push_back(transport_file(input,data,dir==""?filenam:dir+"\\"+filenam));
+              totalBytes += __int64(data.nFileSizeHigh)<<32 | __int64(data.nFileSizeLow) ;
+          }while(FindNextFileA(hFind,&data)) ;
+          FindClose(hFind) ;
+      }
+    }while(!dirs.empty());
   }
+  if(verbose) clrstatus();
 
   if(!transportFiles.size()) {
     printf("No source file be found.\n") ;
@@ -566,12 +596,15 @@ int _tmain(int argc, _TCHAR* argv[])
 
   error_level++ ; // 7
 
-  // transmit files
+  // transfer files
   for(size_t i=0;i<transportFiles.size();i++) {
     string output = outputFile ;
     if(IsDirectory(output)) {
       if(!IsDrive(output)) output += "\\";
-      output += transportFiles[i].data.cFileName;
+      output += transportFiles[i].relative;
+      // force create directories to file_path_of(output)
+      if(moveRecursively)
+        SHCreateDirectoryExA(NULL,file_path_of(output).c_str(),NULL);
     }
     if(!overwriteDestFiles&&file_is_existed(output)) {
       if(equality(output,transportFiles[i].data)) {
@@ -579,7 +612,7 @@ int _tmain(int argc, _TCHAR* argv[])
         continue ;
       }
     }
-    if( !transmit(
+    if( !transfer(
           transportFiles[i].file, output,
           transportFiles[i].data ) ) {
       perrorf("Aborted.") ;
@@ -593,15 +626,26 @@ int _tmain(int argc, _TCHAR* argv[])
 
   // remove files
   if(removeSourceFiles) {
+    if(verbose) statusf("Removing source files...");
     for(size_t i=0;i<transportFiles.size();i++) {
       const string &file = transportFiles[i].file;
       if(forceMoveAllFiles)
         SetFileAttributesA(file.c_str(),FILE_ATTRIBUTE_NORMAL);
       if(!DeleteFileA(file.c_str())) {
+        clrstatus();
         perrorf("Input file `%s' removing failed.",file.c_str()) ;
         return error_level ;
       }
     }
+    // remove all empty directories if files are moved recursively
+    if(moveRecursively) {
+      if(verbose) statusf("Removing source directories...");
+      sort(sourceDirs.rbegin(),sourceDirs.rend());
+      for(size_t i=0;i<sourceDirs.size();i++) {
+        RemoveDirectoryA(sourceDirs[i].c_str());
+      }
+    }
+    if(verbose) clrstatus();
   }else {
     action = "copied";
   }
@@ -633,6 +677,7 @@ void help()
   printf("\t/f\t\t... Force move read-only, hidden and system files.\n");
   printf("\t/n\t\t... Do not remove source files.\n");
   printf("\t/o\t\t... Overwrite existing dest files.\n");
+  printf("\t/r\t\t... Move directories recursively.\n");
   printf("\t/M\t\t... Use multimedia timer on interrupt.\n");
   printf("\t/P\t\t... Prevent suspending on trasmitting files.\n");
   printf("\t/v\t\t... Verbose proceedings.\n") ;
@@ -815,7 +860,7 @@ bool equality(string fileDest, const WIN32_FIND_DATAA &dataSrc)
   return res ;
 }
 //---------------------------------------------------------------------------
-bool transmit(string inputFile, string outputFile, const WIN32_FIND_DATAA &data)
+bool transfer(string inputFile, string outputFile, const WIN32_FIND_DATAA &data)
 {
   bool Result = true ;
   const FILETIME &ftCreation = data.ftCreationTime ;
@@ -831,7 +876,7 @@ bool transmit(string inputFile, string outputFile, const WIN32_FIND_DATAA &data)
     HANDLE ist, ost, hThWrite;
     string fileName = file_name_of(inputFile) ;
     if(verbose) {
-      printf("File `%s' is transmitting...\n",fileName.c_str()) ;
+      printf("File `%s' is transferring...\n",fileName.c_str()) ;
     }
     auto_handle aIst(
       ist = CreateFileA(inputFile.c_str(), GENERIC_READ, FILE_SHARE_READ,
@@ -884,12 +929,12 @@ bool transmit(string inputFile, string outputFile, const WIN32_FIND_DATAA &data)
           do {
             Sleep(THREADWAIT) ;
           }while(pause_status()) ;
-          statusf("") ;
+          clrstatus() ;
         }
         if(verbose&&fSize>0) {
           DWORD per = DWORD(wSize*100/fSize) ;
           DWORD rate = sumAvg / DWORD(avg.size()) ;
-          statusf(" %d%% transmitting completed...[%sB/s] ( %lld/ %lld)",
+          statusf(" %d%% transferring completed...[%sB/s] ( %lld/ %lld)",
             per,IntToKMGT(rate).c_str(),wSize,fSize) ;
         }
       }
@@ -940,14 +985,14 @@ bool transmit(string inputFile, string outputFile, const WIN32_FIND_DATAA &data)
       }else Result = false;
     }
     if(verbose) {
-      statusf("") ;
+      clrstatus() ;
       if(Result)
-        printf("File `%s' (%lld bytes) transmitting succeeded.\n",fileName.c_str(),wSize) ;
+        printf("File `%s' (%lld bytes) transferring succeeded.\n",fileName.c_str(),wSize) ;
       else
-        printf("File `%s' transmitting failed.\n",fileName.c_str()) ;
+        printf("File `%s' transferring failed.\n",fileName.c_str()) ;
     }
   }while(0) ;
-  statusf("") ;
+  clrstatus() ;
   if(Result) do {
     if(!SetFileNameTime(outputFile,&ftCreation,&ftLastAccess,&ftLastWrite)) {
       perrorf("Output file `%s' time-stamp setting error.",outputFile.c_str()) ;
