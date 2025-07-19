@@ -923,9 +923,9 @@ bool transfer(string inputFile, string outputFile, const WIN32_FIND_DATAA &data)
         tick = newTick ;
         if(pause_status(&causingExe)) {
           if(verbose)
-            statusf("Transmitting is paused (\"%s\" is up) %d%%...",causingExe.c_str(),per) ;
+            statusf("Transferring is paused (\"%s\" is up) %d%%...",causingExe.c_str(),per) ;
           else
-            statusf("Transmitting is paused...") ;
+            statusf("Transferring is paused...") ;
           do {
             Sleep(THREADWAIT) ;
           }while(pause_status()) ;
