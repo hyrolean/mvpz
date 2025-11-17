@@ -21,6 +21,7 @@
 using namespace std;
 
 //#<OFF>#define EQUALITY_CHECK_ATTRIBUTES
+#define CHECK_FILESIZE_STRICTLY
 
 //---------------------------------------------------------------------------
 // forward declarations
@@ -542,7 +543,7 @@ int _tmain(int argc, _TCHAR* argv[])
     for(size_t i=0;i<outputCandidates.size();i++) {
       string outDir = outputCandidates[i] ;
       if(!IsDirectory(outDir)) {
-        perrorf("Dest must be directory path because of multi dest candidates. (%s)",outDir.c_str()) ;
+        perrorf("Dest must be directory path due to multi dest candidates. (%s)",outDir.c_str()) ;
         return error_level ;
       }
       __int64 align = 0 ;
@@ -569,7 +570,7 @@ int _tmain(int argc, _TCHAR* argv[])
   error_level++; // 5
 
   if(files.size()>=2&&!IsDirectory(outputFile)) {
-    perrorf("Destination must be directory path because of multi target source files.") ;
+    perrorf("Destination must be directory path due to multi target source files.") ;
     return error_level ;
   }
 
@@ -886,6 +887,13 @@ bool transfer(string inputFile, string outputFile, const WIN32_FIND_DATAA &data)
       Result = false ;
       break ;
     }
+#ifdef CHECK_FILESIZE_STRICTLY
+    else {
+      LARGE_INTEGER lifsz;
+      if(GetFileSizeEx(ist, &lifsz))
+        fSize = static_cast<__int64>(lifsz.QuadPart);
+    }
+#endif
     auto_handle aOst(
       ost = CreateFileA(outputFile.c_str(), GENERIC_WRITE, FILE_SHARE_READ,
         0, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0) );
